@@ -1,0 +1,609 @@
+1. Maven + Java + Docker Swarm (Manual / on-demand)
+
+Step 1: Create Maven app in ONE command
+mvn archetype:generate -DgroupId=com.exam -DartifactId=java-swarm-manual \
+-DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false
+cd java-swarm-manual
+Step 2: (Optional but recommended) Fix Java version in pom.xml
+Open pom.xml and add inside <project> (below <version>):
+<properties>
+  <maven.compiler.source>17</maven.compiler.source>
+  <maven.compiler.target>17</maven.compiler.target>
+</properties>
+✅ This prevents “unsupported major version” errors.
+Step 3: Confirm app file
+File: src/main/java/com/exam/App.java already exists. Replace content with:
+package com.exam;
+
+public class App {
+    public static void main(String[] args) {
+        System.out.println("Java Swarm Manual OK");
+    }
+}
+Step 4: Build jar
+mvn clean package
+Step 5: Create Dockerfile
+Create Dockerfile:
+FROM eclipse-temurin:17-jdk
+
+WORKDIR /app
+
+COPY target/ *.jar app.jar
+
+CMD ["java","-jar","app.jar"]
+
+
+note:
+	sudo docker build -t java-app .
+	Sudo docker run -p 3000:300 java-app  #this gives the output.
+Step 6: Create Swarm compose file
+Create docker-compose.yml:
+version: "3.8"
+services:
+  javaapp:
+    image: javaapp:1
+    deploy:
+      replicas: 1
+Step 7: GitHub push
+git init
+git add .
+git commit -m "java swarm manual"
+git branch -M main
+git remote add origin <YOUR_REPO_URL>
+git push -u origin main
+
+create a repo and upload it on dockerhub as well: Enter repo name: mvn-one
+	sudo docker tag java-app rajh20/mvn-one:1.0
+	docker push rajh20/mvn-one:1.0
+	docker run rajh20/mvn-one:1.0
+Step 8: Initialize Swarm (on manager)
+docker swarm init
+Step 9: Jenkins pipeline (Manual)
+Create Jenkins Pipeline job → “Pipeline script from SCM” → Git repo.
+Create Jenkinsfile in repo:
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Build') { steps { sh 'mvn clean package' } }
+    stage('Docker Build') { steps { sh 'docker build -t javaapp:1 .' sh 'docker run -p 3000:300 javaapp:1'} }
+    stage('Deploy Swarm') { steps { sh 'docker stack deploy -c docker-compose.yml java_stack' } }
+  }
+}
+Step 10: Verify
+docker stack services java_stack
+docker stack ps java_stack
+Stage explanation (write in exam): Checkout → Maven build → Docker image build → Swarm deploy via stack.
+If we don’t get the output :
+Yep — with this path:
+src/main/java/com/exam/App.java
+your fully-qualified main class is:
+✅ com.exam.App
+(not com.example.App)
+That’s exactly why you got:
+ClassNotFoundException: com.example.App
+
+✅ Fix your run command
+Run it with the correct class:
+java -cp app.jar com.exam.App
+But if you want java -jar app.jar (recommended), you must set the manifest Main-Class.
+
+✅ Fix Maven to generate a runnable JAR (java -jar)
+In your pom.xml, set the correct main class:
+<build>
+  <plugins>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-jar-plugin</artifactId>
+      <version>3.3.0</version>
+      <configuration>
+        <archive>
+          <manifest>
+            <mainClass>com.exam.App</mainClass>
+          </manifest>
+        </archive>
+      </configuration>
+    </plugin>
+  </plugins>
+</build>
+Then rebuild:
+mvn clean package
+Run:
+java -jar target/ *.jar
+
+✅ Verify manifest contains Main-Class
+jar xf target/ *.jar META-INF/MANIFEST.MF
+cat META-INF/MANIFEST.MF
+You should see something like:
+Main-Class: com.exam.App
+the final pom.xml file:
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<modelVersion>4.0.0</modelVersion>
+<groupId>com.exam</groupId>
+<artifactId>java-swarm-manual</artifactId>
+<packaging>jar</packaging>
+<version>1.0-SNAPSHOT</version>
+<properties>
+<maven.compiler.source>17</maven.compiler.source>
+<maven.compiler.target>17</maven.compiler.target>
+</properties>
+<name>java-swarm-manual</name>
+<url>http://maven.apache.org</url>
+<dependencies>
+<dependency>
+<groupId>junit</groupId>
+<artifactId>junit</artifactId>
+<version>3.8.1</version>
+<scope>test</scope>
+</dependency>
+</dependencies>
+<build>
+<plugins>
+<plugin>
+<groupId>org.apache.maven.plugins</groupId>
+<artifactId>maven-jar-plugin</artifactId>
+<version>3.3.0</version>
+<configuration>
+<archive>
+<manifest>
+<mainClass>com.exam.App</mainClass>
+</manifest>
+</archive>
+</configuration>
+</plugin>
+</plugins>
+</build>
+</project>
+
+
+
+
+
+2. Maven + Java + Docker Swarm (Cron-based Automated)
+
+Use same project/files as Q1.
+Step 1: Same code + Dockerfile + compose + GitHub
+Step 2: Jenkinsfile with cron trigger
+pipeline {
+  agent any
+  triggers { cron('H/10 * * * *') } // every 10 minutes
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Build') { steps { sh 'mvn clean package' } }
+    stage('Docker Build') { steps { sh 'docker build -t javaapp:1 .' sh 'docker run -p 3000:300 javaapp:1'} }
+    stage('Deploy Swarm') { steps { sh 'docker stack deploy -c docker-compose.yml java_stack' } }
+  }
+}
+Step 3: Verify
+Jenkins triggers automatically → Check build history
+Swarm:
+docker stack services java_stack
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+3. Maven + Java + Kubernetes (Manual / On-demand)
+
+Step 1: Create Maven app (one command)
+mvn archetype:generate -DgroupId=com.exam -DartifactId=java-k8s-manual \
+-DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false
+cd java-k8s-manual
+Step 2: Update pom.xml (recommended)
+Add:
+<properties>
+  <maven.compiler.source>17</maven.compiler.source>
+  <maven.compiler.target>17</maven.compiler.target>
+</properties>
+Step 3: Make jar runnable output (simple)
+Update App.java:
+package com.exam;
+
+public class App {
+    public static void main(String[] args) {
+        System.out.println("Java Kubernetes Manual OK");
+        while(true) {} // keeps container running for demo (exam-friendly)
+    }
+}
+Step 4: Build
+mvn clean package
+Step 5: Dockerfile
+FROM eclipse-temurin:17-jdk
+
+WORKDIR /app
+
+COPY target/ *.jar app.jar
+
+CMD ["java","-jar","app.jar"]
+Step 6: Build Docker image
+docker build -t javaapp:1 .
+Step 7: Kubernetes manifest
+Create k8s.yml:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: javaapp-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: javaapp
+  template:
+    metadata:
+      labels:
+        app: javaapp
+    spec:
+      containers:
+      - name: javaapp
+        image: javaapp:1
+
+Exam note: If your app is only printing to console (no web port), you can skip Service. Deployment alone is enough.
+Step 8: Jenkinsfile (Manual)
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Build') { steps { sh 'mvn clean package' } }
+    stage('Docker Build') { steps { sh 'docker build -t javaapp:1 .' sh 'docker run -p 3000:300 javaapp-1:1'} }
+  }
+}
+Step 9: Verify
+kubectl create job <job_name> --image=<docker-username>/<repo_name>:<tag>
+kubectl get jobs
+kubectl logs <pod-name>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+4. Maven + Java + Kubernetes (Cron based Automated)
+
+Same as Q3, add cron trigger:
+pipeline {
+  agent any
+  triggers { cron('H/15 * * * *') }
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Build') { steps { sh 'mvn clean package' } }
+    stage('Docker Build') { steps { sh 'docker build -t javaapp:1 .' h 'docker run -p 3000:300 javaapp-1:1'} }
+    
+  }
+}
+Verify:
+kubectl get jobs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+5. React + Docker Swarm
+Step 1: Create React app
+npx create-react-app react-swarm-manual
+cd react-swarm-manual
+Edit src/App.js
+function App() {
+  return (
+    <div style={{padding: 30}}>
+      <h2>React Swarm Manual OK</h2>
+    </div>
+  );
+}
+export default App;
+Test:
+npm install
+npm run build
+Step 2: Dockerfile (Nginx serve)
+Dockerfile
+FROM node:18 AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/build /usr/share/nginx/html
+EXPOSE 80
+Step 3: Swarm compose
+docker-compose.yml
+version: "3.8"
+services:
+  reactapp:
+    image: reactapp:1
+    ports:
+      - "3000:80"
+    deploy:
+      replicas: 1
+Step 4: Git push
+git init
+git add .
+git commit -m "react swarm manual"
+git branch -M main
+git remote add origin <YOUR_REPO_URL>
+git push -u origin main
+Step 5: Jenkinsfile (Manual)
+pipeline {
+  agent any
+
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+
+    stage('Docker Build') {
+      steps { sh 'docker build -t reactapp:1 .' }
+    }
+
+    stage('Deploy to Docker Swarm') {
+      steps { sh 'docker stack deploy -c docker-compose.yml react_stack' }
+    }
+  }
+}
+Verify
+docker stack services react_stack
+curl http://<SWARM_MANAGER_IP>:3000/
+
+6) React + Docker Swarm (Cron-based Automated)
+Add cron trigger:
+pipeline {
+  agent any
+  triggers { cron('H/10 * * * *') }
+
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Docker Build') { steps { sh 'docker build -t reactapp:1 .' } }
+    stage('Deploy to Docker Swarm') {
+      steps { sh 'docker stack deploy -c docker-compose.yml react_stack' }
+    }
+  }
+}
+
+7) React + Kubernetes (Manual / On-demand)
+Use same React app + Dockerfile.
+Step 1: Kubernetes manifest
+k8s-react.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: reactapp
+  template:
+    metadata:
+      labels:
+        app: reactapp
+    spec:
+      containers:
+        - name: reactapp
+          image: reactapp:1
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: react-svc
+spec:
+  selector:
+    app: reactapp
+  ports:
+    - port: 80
+      targetPort: 80
+  type: NodePort
+Step 2: Jenkinsfile (Manual)
+pipeline {
+  agent any
+
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Docker Build') { steps { sh 'docker build -t reactapp:1 .' } }
+    stage('Deploy to Kubernetes') { steps { sh 'kubectl apply -f k8s-react.yml' } }
+  }
+}
+Verify
+kubectl get pods
+kubectl get svc
+minikube service react-svc --url
+
+8) React + Kubernetes (Cron-based Automated)
+pipeline {
+  agent any
+  triggers { cron('H/15 * * * *') }
+
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Docker Build') { steps { sh 'docker build -t reactapp:1 .' } }
+    stage('Deploy to Kubernetes') { steps { sh 'kubectl apply -f k8s-react.yml' } }
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+9. Flask + Docker Swarm
+Step 1: Flask Application (app.py)
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Flask Application Running Successfully"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
+🔹 Step 2: requirements.txt
+flask==3.0.3
+✅ No Gunicorn included
+
+🔹 Step 3: Dockerfile (Simple & Exam-Safe)
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 5000
+CMD ["python","app.py"]
+Step 3: Swarm compose
+docker-compose.yml
+version: "3.8"
+services:
+  flaskapp:
+    image: flaskapp:1
+    ports:
+      - "5000:5000"
+    deploy:
+      replicas: 1
+Step 4: Jenkinsfile (Manual)
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Docker Build') { steps { sh 'docker build -t flaskapp:1 .' } }
+    stage('Deploy Swarm') { steps { sh 'docker stack deploy -c docker-compose.yml flask_stack' } }
+  }
+}
+Verify:
+docker stack services flask_stack
+curl http://<swarm-ip>:5000/
+✅ 10) Flask + Docker Swarm (Cron-based Automated)
+Same as Q9 + cron:
+pipeline {
+  agent any
+  triggers { cron('H/10 * * * *') }
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Docker Build') { steps { sh 'docker build -t flaskapp:1 .' } }
+    stage('Deploy Swarm') { steps { sh 'docker stack deploy -c docker-compose.yml flask_stack' } }
+  }
+}
+
+✅ 11) Flask + Kubernetes (Manual / On-demand)
+Use same Flask project.
+Step 1: K8s manifest
+k8s-flask.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flaskapp
+  template:
+    metadata:
+      labels:
+        app: flaskapp
+    spec:
+      containers:
+      - name: flaskapp
+        image: flaskapp:1
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-svc
+spec:
+  selector:
+    app: flaskapp
+  ports:
+  - port: 80
+    targetPort: 5000
+  type: NodePort
+Step 2: Jenkinsfile (Manual)
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Docker Build') { steps { sh 'docker build -t flaskapp:1 .' } }
+    stage('Deploy K8s') { steps { sh 'kubectl apply -f k8s-flask.yml' } }
+  }
+}
+Step 3: Verify
+kubectl get pods
+kubectl get svc flask-svc
+minikube service flask-svc --url
+
+✅ 12) Flask + Kubernetes (Cron-based Automated)
+Same as Q11 + cron trigger:
+pipeline {
+  agent any
+  triggers { cron('H/15 * * * *') }
+  stages {
+    stage('Checkout') { steps { checkout scm } }
+    stage('Docker Build') { steps { sh 'docker build -t flaskapp:1 .' } }
+    stage('Deploy K8s') { steps { sh 'kubectl apply -f k8s-flask.yml' } }
+  }
+}
+
